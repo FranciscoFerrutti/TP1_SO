@@ -1,0 +1,19 @@
+#Binary Files
+*.bin
+*.sys
+
+#The images
+*.img
+*.qcow2
+*.vmdk
+
+#Object files
+*.o
+
+#Visual Studio files
+.vs
+.vscode/
+[Bb]in/
+
+#mac sh
+docker_build_command.sh
