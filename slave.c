@@ -7,7 +7,11 @@
 #define MAX_MD5 32
 
 int main(){
-
+    char buff[6]={0};
+    
+    read(0,buff,6);
+    printf("el string: %s", buff);
+    
     while(1){
         
         
