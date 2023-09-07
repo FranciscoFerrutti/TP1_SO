@@ -30,7 +30,11 @@ int main(){
             close(parent_to_child_pipe[i][1]);
             close(child_to_parent_pipe[i][0]);
 
-            // child process code goes here
+            //code goes here
+            char *args[] = {"./slave.elf", NULL}; 
+            execve("./slave.elf", args, NULL);
+            perror("Error en execve");
+
 
             close(parent_to_child_pipe[i][0]);
             close(child_to_parent_pipe[i][1]);
