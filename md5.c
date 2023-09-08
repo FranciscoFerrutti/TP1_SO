@@ -22,7 +22,7 @@ int main(int argc, const char * argv[]){
     }
 
     
-    for (int i = 0; i < CANT_HIJOS+1; i++) {
+    for (int i = 0; i < CANT_HIJOS; i++) {
         child_pid[i] = fork();
 
         if (child_pid[i] == -1) {
@@ -52,13 +52,14 @@ int main(int argc, const char * argv[]){
     
     char buff[6]={0};
     buff[0]='h';
-    buff[0]='o';
-    buff[0]='l';
-    buff[0]='a';
-    buff[0]='?';
+    buff[1]='o';
+    buff[2]='l';
+    buff[3]='a';
+    buff[4]='?';
     for(int i=0; i<CANT_HIJOS; i++){
         write(parent_to_child_pipe[i][1], buff, 6);
     }
+    exit(EXIT_SUCCESS);
     FD_ZERO(&readfds);
     for (int i = 0; i < CANT_HIJOS; i++) {
         FD_SET(child_to_parent_pipe[i][0], &readfds); // Add slave pipes to the set

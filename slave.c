@@ -10,8 +10,8 @@ int main(){
     char buff[6]={0};
     
     read(0,buff,6);
-    printf("el string: %s", buff);
-    
+    printf("el string: %s\n", buff);
+    exit(0);
     while(1){
         
         
