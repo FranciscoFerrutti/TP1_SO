@@ -1,16 +1,18 @@
 #include "pipe_manager.h"
 
-#define CANT_HIJOS 1
+#define CHILD_QTY 1
+#define STARTING_FILE 1
+#define INITIAL_FILES_PER_CHILD 2
+
 
 int main(int argc, const char * argv[]){
-    int current_file=1;
-    char aux[60]={0};
-    pid_t child_pid[CANT_HIJOS];
-    int parent_to_child_pipe[CANT_HIJOS][2];
-    int child_to_parent_pipe[CANT_HIJOS][2];
-    fd_set readfds;
     
-    for (int i = 0; i < CANT_HIJOS; i++) {
+    char child_md5[CHILD_QTY][MAX_MD5+1];
+    pid_t child_pid[CHILD_QTY];
+    int parent_to_child_pipe[CHILD_QTY][2];
+    int child_to_parent_pipe[CHILD_QTY][2];
+    
+    for (int i = 0; i < CHILD_QTY; i++) {
         if (pipe(parent_to_child_pipe[i]) == -1 || pipe(child_to_parent_pipe[i]) == -1) {
             perror("pipe");
             exit(EXIT_FAILURE);
@@ -18,7 +20,7 @@ int main(int argc, const char * argv[]){
     }
 
     
-    for (int i = 0; i < CANT_HIJOS; i++) {
+    for (int i = 0; i < CHILD_QTY; i++) {
         child_pid[i] = fork();
 
         if (child_pid[i] == -1) {
@@ -34,9 +36,6 @@ int main(int argc, const char * argv[]){
             dup(parent_to_child_pipe[i][0]);
             close(parent_to_child_pipe[i][0]);
 
-            close(4);
-            dup(1);
-
             close(STDOUT_FILENO);
             dup(child_to_parent_pipe[i][1]);
             close(child_to_parent_pipe[i][1]);
@@ -50,25 +49,38 @@ int main(int argc, const char * argv[]){
             close(parent_to_child_pipe[i][0]);
             close(child_to_parent_pipe[i][1]);
             exit(EXIT_SUCCESS);
-        }      
+        }
         
     }
-    
+
+    fd_set readfds;
     FD_ZERO(&readfds);
-    for (int i = 0; i < CANT_HIJOS; i++) {
+    int max_fd=-1;
+
+    for (int i = 0; i < CHILD_QTY; i++) {
+        if(child_to_parent_pipe[i][0]>max_fd){
+            max_fd = child_to_parent_pipe[i][0];
+        }
         FD_SET(child_to_parent_pipe[i][0], &readfds); // Add slave pipes to the set
     }
 
+    if(max_fd<0){
+        perror("file descriptor");
+        exit(EXIT_FAILURE);
+    }
+
+    int current_file = 1;
+
     while(current_file<argc){
-        int ready = select(FD_SETSIZE, &readfds, NULL, NULL, NULL);
+        int ready = select(max_fd, &readfds, NULL, NULL, NULL);
         if (ready == -1) {
             perror("select");
             exit(1);
         } else if(ready>0){
-            for(int i=0; i<CANT_HIJOS; i++){
+            for(int i=0; i<CHILD_QTY && current_file<argc; i++){
                 if(FD_ISSET(child_to_parent_pipe[i][0], &readfds)){
-                    pipe_read(child_to_parent_pipe[i][0], aux);
-                    printf("pipe content: %s\n", aux);
+                    pipe_read(child_to_parent_pipe[i][0], child_md5[i]);
+                    printf("pipe content from child %d: %s\n", i, child_md5[i]);
                     write(parent_to_child_pipe[i][1], argv[current_file], strlen(argv[current_file])+1);
                     current_file++;
                 }
@@ -76,11 +88,21 @@ int main(int argc, const char * argv[]){
         }
     }
 
-    for (int i = 0; i < CANT_HIJOS; i++) {
+    for (int i = 0; i < CHILD_QTY; i++) {
         close(parent_to_child_pipe[i][1]);
         close(child_to_parent_pipe[i][0]);
         waitpid(child_pid[i], NULL, 0);
     }
 
     exit(EXIT_SUCCESS);
+}
+
+int first_files_per_child(int argc, const char * argv[], int ** parent_to_child_pipe, int ** child_to_parent_pipe){
+    int i;
+
+    for(i=STARTING_FILE; i<argc && i<=INITIAL_FILES_PER_CHILD*CHILD_QTY; i++){
+        pipe_write(parent_to_child_pipe[i%CHILD_QTY][1], argv[i]);
+    }
+
+    return i;
 }
