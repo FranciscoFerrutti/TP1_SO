@@ -1,17 +1,48 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/wait.h>
-
-#define CANT_HIJOS 5
-
-int main(){
-    int i;
-    pid_t child_pid[CANT_HIJOS];
-    int parent_to_child_pipe[CANT_HIJOS][2];
-    int child_to_parent_pipe[CANT_HIJOS][2];
+#include "pipe_manager.h"
+#include <semaphore.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/stat.h> 
+#include <sys/shm.h>
+#include <sys/mman.h>
+#define CHILD_QTY 1
+#define STARTING_FILE 1
+#define INITIAL_FILES_PER_CHILD 2
+#define SHARED_MEMORY_SIZE 1024 // Same size as in md5.c
+#define SHARED_MEMORY_NAME "/my_shared_memory" 
+int main(int argc, const char * argv[]){
     
-    for (i = 0; i < CANT_HIJOS; i++) {
+    char child_md5[CHILD_QTY][MAX_MD5+1];
+    pid_t child_pid[CHILD_QTY];
+    int parent_to_child_pipe[CHILD_QTY][2];
+    int child_to_parent_pipe[CHILD_QTY][2];
+    sem_t *app_semaphore = sem_open("/app_semaphore", O_CREAT, 0666, 1);
+    sem_t *view_semaphore = sem_open("/view_semaphore", O_CREAT, 0666, 0);
+    if (app_semaphore == SEM_FAILED || view_semaphore == SEM_FAILED) {
+        perror("sem_open");
+        exit(EXIT_FAILURE);
+    }
+
+    int shm_fd = shm_open(SHARED_MEMORY_NAME, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
+    if (shm_fd == -1) {
+        perror("shm_open");
+        exit(EXIT_FAILURE);
+    }
+
+    if (ftruncate(shm_fd,  SHARED_MEMORY_SIZE) == -1) {
+        perror("ftruncate");
+        exit(EXIT_FAILURE);
+    }
+
+    char *shared_memory = mmap(NULL,  SHARED_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (shared_memory == MAP_FAILED) {
+        perror("mmap");
+        exit(EXIT_FAILURE);
+    }
+
+    
+    for (int i = 0; i < CHILD_QTY; i++) {
         if (pipe(parent_to_child_pipe[i]) == -1 || pipe(child_to_parent_pipe[i]) == -1) {
             perror("pipe");
             exit(EXIT_FAILURE);
@@ -19,38 +50,101 @@ int main(){
     }
 
     
-    for (i = 0; i < CANT_HIJOS; i++) {
+    for (int i = 0; i < CHILD_QTY; i++) {
         child_pid[i] = fork();
 
         if (child_pid[i] == -1) {
             perror("fork");
             exit(EXIT_FAILURE);
         } else if (child_pid[i] == 0) {
-            
+
             close(parent_to_child_pipe[i][1]);
             close(child_to_parent_pipe[i][0]);
 
             //code goes here
+            close(STDIN_FILENO);
+            dup(parent_to_child_pipe[i][0]);
+            close(parent_to_child_pipe[i][0]);
+
+            close(STDOUT_FILENO);
+            dup(child_to_parent_pipe[i][1]);
+            close(child_to_parent_pipe[i][1]);
+
+            // Close pipes for reading and writing in the child process
+            close(parent_to_child_pipe[i][0]);
+            close(parent_to_child_pipe[i][1]);
+            close(child_to_parent_pipe[i][0]);
+            close(child_to_parent_pipe[i][1]);
+
             char *args[] = {"./slave.elf", NULL}; 
             execve("./slave.elf", args, NULL);
-            perror("Error en execve");
+            perror("execve");
+            exit(EXIT_FAILURE);
 
 
-            close(parent_to_child_pipe[i][0]);
-            close(child_to_parent_pipe[i][1]);
-            exit(EXIT_SUCCESS);
-        } else {
-            
-            close(parent_to_child_pipe[i][0]);
-            close(child_to_parent_pipe[i][1]);
+
+        }
+        
+    }
+
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    int max_fd=-1;
+
+    for (int i = 0; i < CHILD_QTY; i++) {
+        if(child_to_parent_pipe[i][0]>max_fd){
+            max_fd = child_to_parent_pipe[i][0];
+        }
+        FD_SET(child_to_parent_pipe[i][0], &readfds); // Add slave pipes to the set
+    }
+
+    if(max_fd<0){
+        perror("file descriptor");
+        exit(EXIT_FAILURE);
+    }
+
+    int current_file = 1;
+    while (current_file < argc) {
+        int ready = select(max_fd, &readfds, NULL, NULL, NULL);
+        if (ready == -1) {
+            perror("select");
+            exit(EXIT_FAILURE);
+        } else if (ready > 0) {
+            for (int i = 0; i < CHILD_QTY && current_file < argc; i++) {
+                if (FD_ISSET(child_to_parent_pipe[i][0], &readfds)) {
+                    pipe_read(child_to_parent_pipe[i][0], child_md5[i]);
+                    printf("pipe content from child %d: %s\n", i, child_md5[i]);
+
+                    // Write data to shared memory with semaphore
+                    sem_wait(app_semaphore);
+                    strcpy(shared_memory, child_md5[i]);
+                    sem_post(view_semaphore);
+
+                    write(parent_to_child_pipe[i][1], argv[current_file], strlen(argv[current_file]) + 1);
+                    current_file++;
+                }
+            }
         }
     }
 
-    for (i = 0; i < CANT_HIJOS; i++) {
+    for (int i = 0; i < CHILD_QTY; i++) {
         close(parent_to_child_pipe[i][1]);
         close(child_to_parent_pipe[i][0]);
         waitpid(child_pid[i], NULL, 0);
     }
+    sem_close(app_semaphore);
+    sem_close(view_semaphore);
+    sem_unlink("/app_semaphore");
+    sem_unlink("/view_semaphore");
+    exit(EXIT_SUCCESS);
+}
 
-    return 0;
+int first_files_per_child(int argc, const char * argv[], int ** parent_to_child_pipe, int ** child_to_parent_pipe){
+    int i;
+
+    for(i=STARTING_FILE; i<argc && i<=INITIAL_FILES_PER_CHILD*CHILD_QTY; i++){
+        pipe_write(parent_to_child_pipe[i%CHILD_QTY][1], argv[i]);
+    }
+
+    return i;
 }
