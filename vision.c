@@ -1,3 +1,4 @@
+//vision.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,22 +16,32 @@
 int main() {
     // Open shared memory and semaphores
     int shm_fd = shm_open(SHARED_MEMORY_NAME, O_RDWR, S_IRUSR | S_IWUSR);
-    sem_t *app_semaphore = sem_open(APP_SEMAPHORE_NAME, 0);
-    sem_t *view_semaphore = sem_open(VIEW_SEMAPHORE_NAME, 0);
+    if (shm_fd == -1) {
+        perror("shm_open");
+        exit(EXIT_FAILURE);
+    }
 
-    // Check for errors when opening shared memory and semaphores
+    sem_t *app_semaphore = sem_open(APP_SEMAPHORE_NAME, O_CREAT, 0666, 1);
+    if (app_semaphore == SEM_FAILED) {
+        perror("sem_open (app_semaphore)");
+        exit(EXIT_FAILURE);
+    }
+
+    sem_t *view_semaphore = sem_open(VIEW_SEMAPHORE_NAME, O_CREAT, 0666, 0);
+    if (view_semaphore == SEM_FAILED) {
+        perror("sem_open (view_semaphore)");
+        exit(EXIT_FAILURE);
+    }
+
+    char *shared_memory = mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
+    if (shared_memory == MAP_FAILED) {
+        perror("mmap");
+        exit(EXIT_FAILURE);
+    }
 
     while (1) {
         // Wait for the application to write data to shared memory
         sem_wait(view_semaphore);
-
-        // Map the shared memory segment into memory
-        char *shared_memory = mmap(NULL, sizeof(char) * SHARED_MEMORY_SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
-
-        if (shared_memory == MAP_FAILED) {
-            perror("mmap");
-            exit(EXIT_FAILURE);
-        }
 
         printf("Received from application: %s\n", shared_memory);
 
