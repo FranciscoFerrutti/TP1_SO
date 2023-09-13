@@ -1,4 +1,3 @@
-//md5.c
 #include "pipe_manager.h"
 #include <semaphore.h>
 #include <fcntl.h>
@@ -140,6 +139,12 @@ int main(int argc, const char *argv[]) {
         close(child_to_parent_pipe[i][0]);
         waitpid(child_pid[i], NULL, 0);
     }
+
+    // Close and unlink semaphores
+    sem_close(app_semaphore);
+    sem_close(view_semaphore);
+    sem_unlink("/app_semaphore");
+    sem_unlink("/view_semaphore");
 
     close(shm_fd);
     shm_unlink(SHARED_MEMORY_NAME);
