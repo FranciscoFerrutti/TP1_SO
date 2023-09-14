@@ -115,6 +115,7 @@ int main(int argc, const char *argv[]) {
 
     while (1) {
         int ready = select(max_fd + 1, &readfds, NULL, NULL, NULL);
+        // sleep(1);
         if (ready == -1) {
             perror("select");
             exit(EXIT_FAILURE);
@@ -132,7 +133,8 @@ int main(int argc, const char *argv[]) {
                         FD_CLR(child_to_parent_pipe[i][0], &readfds);
                     } else {
                         // child_md5[i][bytes_read] = '\0';
-                        printf("Received MD5 hash from child %d: %s\n", i, child_md5[i]);
+                        
+                        printf("PID:%d Received MD5 hash from child %d: %s\n",child_pid[i], i, child_md5[i]);
                         
 
                         // Write data to shared memory with semaphore
@@ -174,11 +176,29 @@ int main(int argc, const char *argv[]) {
 
 int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]) {
     int files_assigned = 0;
+    int child_index = 0;
 
-    for (int i = 1; i < argc && files_assigned < (CHILD_QTY * INITIAL_FILES_PER_CHILD); i++) {
-        write(parent_to_child_pipe[files_assigned % CHILD_QTY][1], argv[i], strlen(argv[i]) + 1);
+    while (files_assigned < argc) {
+        // Distribute files to child processes in a round-robin manner
+        pipe_write(parent_to_child_pipe[child_index][1], argv[files_assigned]);
         files_assigned++;
+        child_index = (child_index + 1) % CHILD_QTY;
+    }
+
+    // Close write ends of pipes to signal the end of file distribution
+    for (int i = 0; i < CHILD_QTY; i++) {
+        close(parent_to_child_pipe[i][1]);
     }
 
     return files_assigned;
 }
+
+
+
+
+
+
+
+
+
+
