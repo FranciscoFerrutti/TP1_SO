@@ -6,11 +6,12 @@ int main(){
     char md5[MAX_MD5+1];
     char * md5_cmd="md5sum ./%s";
     char command[MAX_PATH + strlen(md5_cmd)];
+    int ready=1;
+    //printf("asd\n");
 
+    while(ready>0){
 
-    while(1){
-
-        int ready = pipe_read(STDIN_FILENO, path);
+        ready = pipe_read(STDIN_FILENO, path);
         if(ready==-1){
             perror("select");
             exit(EXIT_FAILURE);
@@ -29,13 +30,15 @@ int main(){
             exit(EXIT_FAILURE);
         }
 
-        fgets(md5, MAX_MD5, fp);
+        fgets(md5, MAX_MD5+1, fp);
         md5[MAX_MD5] = 0;
         pclose(fp);
-
+        //printf("\nfadsfas\n");
+        
+        //write(STDERR_FILENO, md5, strlen(md5)+1);
         pipe_write(STDOUT_FILENO, md5);
-        exit(EXIT_SUCCESS);
     }
 
+    exit(EXIT_SUCCESS);
     
 }

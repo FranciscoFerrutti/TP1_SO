@@ -4,6 +4,7 @@
 #define STARTING_FILE 1
 #define INITIAL_FILES_PER_CHILD 2
 
+int first_files_per_child(int argc, const char * argv[], int parent_to_child_pipe[CHILD_QTY][2], int child_to_parent_pipe[CHILD_QTY][2]);
 
 int main(int argc, const char * argv[]){
     
@@ -53,6 +54,11 @@ int main(int argc, const char * argv[]){
         
     }
 
+    for (int i = 0; i < CHILD_QTY; i++) {
+        close(parent_to_child_pipe[i][0]);
+        close(child_to_parent_pipe[i][1]);
+    }
+
     fd_set readfds;
     FD_ZERO(&readfds);
     int max_fd=-1;
@@ -69,10 +75,11 @@ int main(int argc, const char * argv[]){
         exit(EXIT_FAILURE);
     }
 
-    int current_file = 1;
 
+    int current_file=1;
+    first_files_per_child(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
     while(current_file<argc){
-        int ready = select(max_fd, &readfds, NULL, NULL, NULL);
+        int ready = select(FD_SETSIZE, &readfds, NULL, NULL, NULL);
         if (ready == -1) {
             perror("select");
             exit(1);
@@ -81,10 +88,17 @@ int main(int argc, const char * argv[]){
                 if(FD_ISSET(child_to_parent_pipe[i][0], &readfds)){
                     pipe_read(child_to_parent_pipe[i][0], child_md5[i]);
                     printf("pipe content from child %d: %s\n", i, child_md5[i]);
-                    write(parent_to_child_pipe[i][1], argv[current_file], strlen(argv[current_file])+1);
-                    current_file++;
+
+                    if(current_file<argc){
+                        write(parent_to_child_pipe[i][1], argv[current_file], strlen(argv[current_file])+1);
+                        current_file++;
+                    }
+
                 }
             }
+        } else {
+            printf("ready=%d", ready);
+            sleep(100000);
         }
     }
 
@@ -92,17 +106,18 @@ int main(int argc, const char * argv[]){
         close(parent_to_child_pipe[i][1]);
         close(child_to_parent_pipe[i][0]);
         waitpid(child_pid[i], NULL, 0);
-    }
-
+    } // remember: when every writing-end of a pipe is closed, the process with the reading-end finishes on its own
+    //printf("******\n");
     exit(EXIT_SUCCESS);
 }
 
-int first_files_per_child(int argc, const char * argv[], int ** parent_to_child_pipe, int ** child_to_parent_pipe){
-    int i;
+int first_files_per_child(int argc, const char * argv[], int parent_to_child_pipe[CHILD_QTY][2], int child_to_parent_pipe[CHILD_QTY][2]){
 
+    int i;
     for(i=STARTING_FILE; i<argc && i<=INITIAL_FILES_PER_CHILD*CHILD_QTY; i++){
         pipe_write(parent_to_child_pipe[i%CHILD_QTY][1], argv[i]);
     }
+
 
     return i;
 }
