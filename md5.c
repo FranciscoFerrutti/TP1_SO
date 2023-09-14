@@ -23,7 +23,7 @@
 #define VIEW_SEMAPHORE_NAME "/view_semaphore"
 
 // Function to distribute files to slaves
-int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
+void distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
 
 int main(int argc, const char *argv[]) {
     
@@ -99,7 +99,7 @@ int main(int argc, const char *argv[]) {
     }
 
     // Initialize file distribution
-    int files_assigned = distribute_files(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
+   
 
     // Main processing loop
     fd_set readfds;
@@ -112,47 +112,65 @@ int main(int argc, const char *argv[]) {
         }
         FD_SET(child_to_parent_pipe[i][0], &readfds); // Add slave pipes to the set
     }
+    distribute_files(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
+    int current_file_index = 0;
 
-    while (1) {
+
+    while (current_file_index < argc) {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        int max_fd = -1;
+
+        for (int i = 0; i < CHILD_QTY; i++) {
+            if (FD_ISSET(child_to_parent_pipe[i][0], &readfds)) {
+                continue; // Skip pipes that have already received data
+            }
+
+            if (child_to_parent_pipe[i][0] > max_fd) {
+                max_fd = child_to_parent_pipe[i][0];
+            }
+            FD_SET(child_to_parent_pipe[i][0], &readfds); // Add slave pipes to the set
+        }
+
         int ready = select(max_fd + 1, &readfds, NULL, NULL, NULL);
-        // sleep(1);
         if (ready == -1) {
             perror("select");
             exit(EXIT_FAILURE);
-        } else if (ready > 0) {
-            for (int i = 0; i < CHILD_QTY; i++) {
-                if (FD_ISSET(child_to_parent_pipe[i][0], &readfds)) {
-                    // Read MD5 hash from the child
-                    int bytes_read = pipe_read(child_to_parent_pipe[i][0], child_md5[i]);
-                    if (bytes_read < 0) {
-                        perror("read");
-                        exit(EXIT_FAILURE);
-                    } else if (bytes_read == 0) {
-                        // No more data from this child, remove it from the set
-                        close(child_to_parent_pipe[i][0]);
-                        FD_CLR(child_to_parent_pipe[i][0], &readfds);
+        }
+
+        for (int i = 0; i < CHILD_QTY; i++) {
+            if (FD_ISSET(child_to_parent_pipe[i][0], &readfds)) {
+                // Read MD5 hash from the child
+                int bytes_read = pipe_read(child_to_parent_pipe[i][0], child_md5[i]);
+                if (bytes_read < 0) {
+                    perror("read");
+                    exit(EXIT_FAILURE);
+                } else if (bytes_read == 0) {
+                    // No more data from this child, remove it from the set
+                    close(child_to_parent_pipe[i][0]);
+                    FD_CLR(child_to_parent_pipe[i][0], &readfds);
+                } else {
+                    printf("PID:%d Received MD5 hash of file %s from child %d: %s\n", child_pid[i], argv[current_file_index], i, child_md5[i]);
+
+                    // Write data to shared memory with semaphore
+                    strcpy(shared_memory, child_md5[i]);
+                    sem_post(view_semaphore);
+
+                    current_file_index++; // Move to the next file
+
+                    if (current_file_index < argc) {
+                        pipe_write(parent_to_child_pipe[i][1], argv[current_file_index]);
                     } else {
-                        // child_md5[i][bytes_read] = '\0';
-                        
-                        printf("PID:%d Received MD5 hash from child %d: %s\n",child_pid[i], i, child_md5[i]);
-                        
-
-                        // Write data to shared memory with semaphore
-                        strcpy(shared_memory, child_md5[i]);
-                        sem_post(view_semaphore);
-
-                        if (files_assigned < argc) {
-                            pipe_write(parent_to_child_pipe[i][1], argv[files_assigned]);
-                            files_assigned++;
-                        } else {
-                            // No more files to assign, signal to exit
-                            close(parent_to_child_pipe[i][1]);
-                        }
+                        // No more files to assign, signal to exit
+                        close(parent_to_child_pipe[i][1]);
                     }
                 }
             }
         }
     }
+
+
+
     // Signal view process that all files are processed
     sem_post(view_semaphore);
 
@@ -174,24 +192,21 @@ int main(int argc, const char *argv[]) {
     return EXIT_SUCCESS;
 }
 
-int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]) {
+void distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]) {
     int files_assigned = 0;
-    int child_index = 0;
-
-    while (files_assigned < argc) {
-        // Distribute files to child processes in a round-robin manner
-        pipe_write(parent_to_child_pipe[child_index][1], argv[files_assigned]);
-        files_assigned++;
-        child_index = (child_index + 1) % CHILD_QTY;
+    
+    for (int child_index = 0; child_index < CHILD_QTY; child_index++) {
+        for (int i = child_index; i < argc; i += CHILD_QTY) {
+            // Distribute files to child processes in a round-robin manner
+            pipe_write(parent_to_child_pipe[child_index][1], argv[i]);
+            files_assigned++;
+        }
+        
+        // Close write end of the pipe for this child to signal the end of file distribution
+        close(parent_to_child_pipe[child_index][1]);
     }
-
-    // Close write ends of pipes to signal the end of file distribution
-    for (int i = 0; i < CHILD_QTY; i++) {
-        close(parent_to_child_pipe[i][1]);
-    }
-
-    return files_assigned;
 }
+
 
 
 
