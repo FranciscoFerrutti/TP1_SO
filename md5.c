@@ -26,6 +26,7 @@
 int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
 
 int main(int argc, const char *argv[]) {
+    
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <file_path>\n", argv[0]);
         exit(EXIT_FAILURE);
@@ -121,7 +122,7 @@ int main(int argc, const char *argv[]) {
             for (int i = 0; i < CHILD_QTY; i++) {
                 if (FD_ISSET(child_to_parent_pipe[i][0], &readfds)) {
                     // Read MD5 hash from the child
-                    int bytes_read = read(child_to_parent_pipe[i][0], child_md5[i], MAX_MD5);
+                    int bytes_read = pipe_read(child_to_parent_pipe[i][0], child_md5[i]);
                     if (bytes_read < 0) {
                         perror("read");
                         exit(EXIT_FAILURE);
@@ -130,15 +131,16 @@ int main(int argc, const char *argv[]) {
                         close(child_to_parent_pipe[i][0]);
                         FD_CLR(child_to_parent_pipe[i][0], &readfds);
                     } else {
-                        child_md5[i][bytes_read] = '\0';
+                        // child_md5[i][bytes_read] = '\0';
                         printf("Received MD5 hash from child %d: %s\n", i, child_md5[i]);
+                        
 
                         // Write data to shared memory with semaphore
                         strcpy(shared_memory, child_md5[i]);
                         sem_post(view_semaphore);
 
                         if (files_assigned < argc) {
-                            write(parent_to_child_pipe[i][1], argv[files_assigned], strlen(argv[files_assigned]) + 1);
+                            pipe_write(parent_to_child_pipe[i][1], argv[files_assigned]);
                             files_assigned++;
                         } else {
                             // No more files to assign, signal to exit
@@ -149,7 +151,6 @@ int main(int argc, const char *argv[]) {
             }
         }
     }
-
     // Signal view process that all files are processed
     sem_post(view_semaphore);
 
@@ -168,7 +169,6 @@ int main(int argc, const char *argv[]) {
     // Close and unlink shared memory
     close(shm_fd);
     shm_unlink(SHARED_MEMORY_NAME);
-
     return EXIT_SUCCESS;
 }
 
