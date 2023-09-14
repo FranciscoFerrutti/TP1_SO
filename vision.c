@@ -17,12 +17,7 @@
 int main() {
 
   
-    // Create shared memory
-    int shm_fd = shm_open(SHARED_MEMORY_NAME, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
-    if (shm_fd == -1) {
-        perror("shm_open");
-        exit(EXIT_FAILURE);
-    }
+   
     
     // Declare and initialize semaphores
     sem_t *app_semaphore = sem_open(APP_SEMAPHORE_NAME, O_CREAT, 0666, 1);
@@ -36,18 +31,28 @@ int main() {
         perror("sem_open (view_semaphore)");
         exit(EXIT_FAILURE);
     }
-    
+
+    sem_wait(view_semaphore);
+    int shm_fd = shm_open(SHARED_MEMORY_NAME, O_RDWR, S_IRUSR | S_IWUSR);
+    if (shm_fd == -1) {
+        perror("shm_open");
+        exit(EXIT_FAILURE);
+    }
+
     char *shared_memory = mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ, MAP_SHARED, shm_fd, 0);
     if (shared_memory == MAP_FAILED) {
         perror("mmap");
         exit(EXIT_FAILURE);
     }
+    
+    sem_post(app_semaphore);
 
- 
+    sem_wait(view_semaphore);
+
     while (shared_memory[0]!= '\0') {
         // Wait for the application to write data to shared memory
+    
         sem_wait(view_semaphore);
-
         // Process the received data (MD5 hash)
         // char md5[MAX_MD5 + 1];
         // strncpy(md5, shared_memory, MAX_MD5);
