@@ -1,41 +1,44 @@
+//md5.c
 #include "pipe_manager.h"
-#include <semaphore.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/stat.h>
-#include <sys/shm.h>
-#include <sys/mman.h>
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/select.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <semaphore.h>
+#include <errno.h>
 
-#define CHILD_QTY 1
-#define STARTING_FILE 1
+// Constants
+#define CHILD_QTY 5
 #define INITIAL_FILES_PER_CHILD 2
-#define SHARED_MEMORY_SIZE 1024 // Adjust this size as needed
+#define MAX_MD5 32
+#define SHARED_MEMORY_SIZE 1024
 #define SHARED_MEMORY_NAME "/my_shared_memory"
+#define APP_SEMAPHORE_NAME "/app_semaphore"
+#define VIEW_SEMAPHORE_NAME "/view_semaphore"
 
-int first_files_per_child(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
-
+// Function to distribute files to slaves
+int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
 
 int main(int argc, const char *argv[]) {
-
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <file_path>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
     // Declare and initialize semaphores
-    sem_t *app_semaphore = sem_open("/app_semaphore", O_CREAT, 0666, 1);
+    sem_t *app_semaphore = sem_open(APP_SEMAPHORE_NAME, O_CREAT, 0666, 1);
     if (app_semaphore == SEM_FAILED) {
         perror("sem_open (app_semaphore)");
         exit(EXIT_FAILURE);
     }
 
-    sem_t *view_semaphore = sem_open("/view_semaphore", O_CREAT, 0666, 0);
+    sem_t *view_semaphore = sem_open(VIEW_SEMAPHORE_NAME, O_CREAT, 0666, 0);
     if (view_semaphore == SEM_FAILED) {
         perror("sem_open (view_semaphore)");
         exit(EXIT_FAILURE);
@@ -46,6 +49,7 @@ int main(int argc, const char *argv[]) {
     int parent_to_child_pipe[CHILD_QTY][2];
     int child_to_parent_pipe[CHILD_QTY][2];
 
+    // Create shared memory
     int shm_fd = shm_open(SHARED_MEMORY_NAME, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
     if (shm_fd == -1) {
         perror("shm_open");
@@ -63,7 +67,13 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    // Create pipes and fork child processes
     for (int i = 0; i < CHILD_QTY; i++) {
+        if (pipe(parent_to_child_pipe[i]) == -1 || pipe(child_to_parent_pipe[i]) == -1) {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
+
         child_pid[i] = fork();
 
         if (child_pid[i] == -1) {
@@ -87,6 +97,10 @@ int main(int argc, const char *argv[]) {
         }
     }
 
+    // Initialize file distribution
+    int files_assigned = distribute_files(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
+
+    // Main processing loop
     fd_set readfds;
     FD_ZERO(&readfds);
     int max_fd = -1;
@@ -98,15 +112,7 @@ int main(int argc, const char *argv[]) {
         FD_SET(child_to_parent_pipe[i][0], &readfds); // Add slave pipes to the set
     }
 
-    if (max_fd < 0) {
-        perror("file descriptor");
-        exit(EXIT_FAILURE);
-    }
-
-    int current_file = 1;
-    int files_assigned = first_files_per_child(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
-
-    while (current_file < argc || files_assigned < argc) {
+    while (1) {
         int ready = select(max_fd + 1, &readfds, NULL, NULL, NULL);
         if (ready == -1) {
             perror("select");
@@ -114,49 +120,63 @@ int main(int argc, const char *argv[]) {
         } else if (ready > 0) {
             for (int i = 0; i < CHILD_QTY; i++) {
                 if (FD_ISSET(child_to_parent_pipe[i][0], &readfds)) {
-                    pipe_read(child_to_parent_pipe[i][0], child_md5[i]);
-                    printf("pipe content from child %d: %s\n", i, child_md5[i]);
-
-                    // Write data to shared memory with semaphore
-                    sem_wait(app_semaphore);
-                    strcpy(shared_memory, child_md5[i]);
-                    sem_post(view_semaphore);
-
-                    if (files_assigned < argc) {
-                        write(parent_to_child_pipe[i][1], argv[files_assigned], strlen(argv[files_assigned]) + 1);
-                        files_assigned++;
+                    // Read MD5 hash from the child
+                    int bytes_read = read(child_to_parent_pipe[i][0], child_md5[i], MAX_MD5);
+                    if (bytes_read < 0) {
+                        perror("read");
+                        exit(EXIT_FAILURE);
+                    } else if (bytes_read == 0) {
+                        // No more data from this child, remove it from the set
+                        close(child_to_parent_pipe[i][0]);
+                        FD_CLR(child_to_parent_pipe[i][0], &readfds);
                     } else {
-                        // No more files to assign, signal to exit
-                        write(parent_to_child_pipe[i][1], "", 1);
+                        child_md5[i][bytes_read] = '\0';
+                        printf("Received MD5 hash from child %d: %s\n", i, child_md5[i]);
+
+                        // Write data to shared memory with semaphore
+                        strcpy(shared_memory, child_md5[i]);
+                        sem_post(view_semaphore);
+
+                        if (files_assigned < argc) {
+                            write(parent_to_child_pipe[i][1], argv[files_assigned], strlen(argv[files_assigned]) + 1);
+                            files_assigned++;
+                        } else {
+                            // No more files to assign, signal to exit
+                            close(parent_to_child_pipe[i][1]);
+                        }
                     }
                 }
             }
         }
     }
 
+    // Signal view process that all files are processed
+    sem_post(view_semaphore);
+
+    // Wait for child processes to finish
     for (int i = 0; i < CHILD_QTY; i++) {
-        close(parent_to_child_pipe[i][1]);
-        close(child_to_parent_pipe[i][0]);
         waitpid(child_pid[i], NULL, 0);
+        close(parent_to_child_pipe[i][1]);
     }
 
     // Close and unlink semaphores
     sem_close(app_semaphore);
     sem_close(view_semaphore);
-    sem_unlink("/app_semaphore");
-    sem_unlink("/view_semaphore");
+    sem_unlink(APP_SEMAPHORE_NAME);
+    sem_unlink(VIEW_SEMAPHORE_NAME);
 
+    // Close and unlink shared memory
     close(shm_fd);
     shm_unlink(SHARED_MEMORY_NAME);
+
     return EXIT_SUCCESS;
 }
 
-int first_files_per_child(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]) {
-    int i;
+int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]) {
     int files_assigned = 0;
 
-    for (i = STARTING_FILE; i < argc && i <= INITIAL_FILES_PER_CHILD * CHILD_QTY; i++) {
-        pipe_write(parent_to_child_pipe[i % CHILD_QTY][TO_WRITE], argv[i]);
+    for (int i = 1; i < argc && files_assigned < (CHILD_QTY * INITIAL_FILES_PER_CHILD); i++) {
+        write(parent_to_child_pipe[files_assigned % CHILD_QTY][1], argv[i], strlen(argv[i]) + 1);
         files_assigned++;
     }
 

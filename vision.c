@@ -1,4 +1,4 @@
-// vision.c
+//vision.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,7 +11,8 @@
 #define SHARED_MEMORY_NAME "/my_shared_memory"
 #define APP_SEMAPHORE_NAME "/app_semaphore"
 #define VIEW_SEMAPHORE_NAME "/view_semaphore"
-#define SHARED_MEMORY_SIZE 1024 // Adjust this size as needed
+#define SHARED_MEMORY_SIZE 1024
+#define MAX_MD5 32
 
 int main() {
     // Open shared memory and semaphores
@@ -44,18 +45,16 @@ int main() {
         // Wait for the application to write data to shared memory
         sem_wait(view_semaphore);
 
-        // Check if the data is empty (indicating no more files to process)
-        if (shared_memory[0] == '\0') {
-            break;
-        }
+        // Process the received data (MD5 hash)
+        char md5[MAX_MD5 + 1];
+        strncpy(md5, shared_memory, MAX_MD5);
+        md5[MAX_MD5] = '\0';
 
-        printf("Received from application: %s\n", shared_memory);
+        // Display the received data
+        printf("Received MD5 hash from application: %s\n", md5);
 
         // Signal the application that data has been read
         sem_post(app_semaphore);
-
-        // Sleep or perform other processing as necessary
-        usleep(100000); // Sleep for 100 milliseconds
     }
 
     // Cleanup: Close shared memory and semaphores
@@ -65,4 +64,3 @@ int main() {
 
     return EXIT_SUCCESS;
 }
-
