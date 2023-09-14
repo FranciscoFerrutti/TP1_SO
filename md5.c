@@ -116,16 +116,12 @@ int main(int argc, const char *argv[]) {
     int current_file_index = 0;
 
 
-    while (current_file_index < argc) {
+   while (current_file_index < argc) {
         fd_set readfds;
         FD_ZERO(&readfds);
         int max_fd = -1;
 
         for (int i = 0; i < CHILD_QTY; i++) {
-            if (FD_ISSET(child_to_parent_pipe[i][0], &readfds)) {
-                continue; // Skip pipes that have already received data
-            }
-
             if (child_to_parent_pipe[i][0] > max_fd) {
                 max_fd = child_to_parent_pipe[i][0];
             }
@@ -145,11 +141,13 @@ int main(int argc, const char *argv[]) {
                 if (bytes_read < 0) {
                     perror("read");
                     exit(EXIT_FAILURE);
-                } else if (bytes_read == 0) {
+                } 
+                else if (bytes_read == 0) {
                     // No more data from this child, remove it from the set
                     close(child_to_parent_pipe[i][0]);
                     FD_CLR(child_to_parent_pipe[i][0], &readfds);
-                } else {
+                } 
+                else {
                     printf("PID:%d Received MD5 hash of file %s from child %d: %s\n", child_pid[i], argv[current_file_index], i, child_md5[i]);
 
                     // Write data to shared memory with semaphore
@@ -160,7 +158,8 @@ int main(int argc, const char *argv[]) {
 
                     if (current_file_index < argc) {
                         pipe_write(parent_to_child_pipe[i][1], argv[current_file_index]);
-                    } else {
+                    } 
+                    else {
                         // No more files to assign, signal to exit
                         close(parent_to_child_pipe[i][1]);
                     }
@@ -168,6 +167,7 @@ int main(int argc, const char *argv[]) {
             }
         }
     }
+
 
 
 
