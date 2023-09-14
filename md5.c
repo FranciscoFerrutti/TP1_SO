@@ -167,7 +167,7 @@ int main(int argc, const char *argv[]) {
             }
         }
     }
-
+    shared_memory[0] = '\0';
 
 
 

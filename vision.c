@@ -40,8 +40,7 @@ int main() {
         perror("mmap");
         exit(EXIT_FAILURE);
     }
-
-    while (1) {
+    while (shared_memory[0]!= '\0') {
         // Wait for the application to write data to shared memory
         sem_wait(view_semaphore);
 
@@ -51,10 +50,14 @@ int main() {
         md5[MAX_MD5] = '\0';
 
         // Display the received data
-        printf("Received MD5 hash from application: %s\n", md5);
+        if(shared_memory[0] != '\0'){
+            printf("Received MD5 hash from application: %s\n", md5);
+        }
+        
 
         // Signal the application that data has been read
         sem_post(app_semaphore);
+
     }
 
     // Cleanup: Close shared memory and semaphores
