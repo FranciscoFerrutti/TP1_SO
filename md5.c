@@ -125,8 +125,8 @@ int main(int argc, const char *argv[]) {
     distribute_files(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
     int current_file_index = 0;
 
-
-   while (current_file_index < argc) {
+    int sh_mem_counter = 0;
+    while (current_file_index < argc) {
         fd_set readfds;
         FD_ZERO(&readfds);
         int max_fd = -1;
@@ -159,8 +159,11 @@ int main(int argc, const char *argv[]) {
                 } 
                 else {
                     sem_wait(app_semaphore);
+                    char str[300];
+                    sprintf(str, "PID:%d FILE:%s MD5:%s\n", child_pid[i], argv[current_file_index], child_md5[i]);
                     // printf("PID:%d Received MD5 hash of file %s from child %d: %s\n", child_pid[i], argv[current_file_index], i, child_md5[i]);
-                    sprintf(shared_memory, "PID:%d FILE:%s MD5:%s\n", child_pid[i], argv[current_file_index], child_md5[i]);
+                    sprintf(shared_memory+sh_mem_counter, str);
+                    sh_mem_counter += strlen(str);
                     // Write data to shared memory with semaphore
                     //strcpy(shared_memory, child_md5[i]);
                     sem_post(view_semaphore);
@@ -178,8 +181,8 @@ int main(int argc, const char *argv[]) {
             }
         }
     }
-    shared_memory[0] = '\0';
-
+    shared_memory[sh_mem_counter] = 0;    
+    shared_memory[sh_mem_counter+1] = -1;
 
 
     // Signal view process that all files are processed

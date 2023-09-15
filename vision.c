@@ -46,20 +46,23 @@ int main() {
     }
     
     sem_post(app_semaphore);
-
+    printf("aaaaaaaaaaaaa");
     sem_wait(view_semaphore);
-
-    while (shared_memory[0]!= '\0') {
+    printf("bbbbbbbbbbb");
+    int sh_mem_counter = 0;
+    while (shared_memory[0]!= '\0' && shared_memory[sh_mem_counter+1] != -1) {
         // Wait for the application to write data to shared memory
     
         sem_wait(view_semaphore);
+        printf("cccccccccccc");
         // Process the received data (MD5 hash)
         // char md5[MAX_MD5 + 1];
         // strncpy(md5, shared_memory, MAX_MD5);
         // md5[MAX_MD5] = '\0';
 
         // Display the received data
-        if(shared_memory[0] != '\0'){
+        if(shared_memory[0]!= '\0' && shared_memory[sh_mem_counter+1] != -1){
+            sh_mem_counter += strlen(shared_memory+sh_mem_counter);
             printf("%s\n", shared_memory);
         }
         
