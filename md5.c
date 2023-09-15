@@ -163,7 +163,7 @@ int main(int argc, const char *argv[]) {
                     //strcpy(shared_memory, child_md5[i]);
                     
                     current_file_index++; // Move to the next file
-                    sem_post(avail_semaphore);
+                    
 
                     if (current_file_index < argc) {
                         pipe_write(parent_to_child_pipe[i][1], argv[current_file_index]);
@@ -177,6 +177,7 @@ int main(int argc, const char *argv[]) {
         }
         sprintf(shared_memory+current_file_index*info_length, "\n");
         sem_post(shm_semaphore);
+        sem_post(avail_semaphore);
     }
     sprintf(shared_memory+current_file_index*info_length, "\t");
 
