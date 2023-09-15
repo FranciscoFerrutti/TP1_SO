@@ -14,7 +14,7 @@
 #define TO_WRITE 2
 
 //linux filesystem Ext4 path limitation is 4096 bytes
-#define MAX_PATH 4096
+#define MAX_PATH 80
 #define MAX_MD5 32
 
 int pipe_read(int fd, char *buff);

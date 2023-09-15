@@ -19,11 +19,13 @@
 #define MAX_MD5 32
 #define SHARED_MEMORY_SIZE 100000
 #define SHARED_MEMORY_NAME "/my_shared_memory"
-#define APP_SEMAPHORE_NAME "/app_semaphore"
-#define VIEW_SEMAPHORE_NAME "/view_semaphore"
+#define SHM_SEMAPHORE_NAME "/shm_semaphore"
+#define AVAIL_SEMAPHORE_NAME "/avail_semaphore"
+#define INFO_TEXT "PID:%d - FILE:%s - MD5:%s"
 
 // Function to distribute files to slaves
 void distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
+void print_in_shm(int idx, int pid, char * path, char * md5);
 
 int main(int argc, const char *argv[]) {
     
@@ -41,8 +43,6 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
     
-
-    
     char *shared_memory = mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (shared_memory == MAP_FAILED) {
         perror("mmap");
@@ -50,19 +50,18 @@ int main(int argc, const char *argv[]) {
     }
     
 
-    sem_t *app_semaphore = sem_open(APP_SEMAPHORE_NAME, 0); // Open existing semaphore
-    if (app_semaphore == SEM_FAILED) {
-        perror("sem_open (app_semaphore)");
+    sem_t *shm_semaphore = sem_open(SHM_SEMAPHORE_NAME, 1); // Open existing semaphore
+    if (shm_semaphore == SEM_FAILED) {
+        perror("sem_open (shm_semaphore)");
         exit(EXIT_FAILURE);
     }
 
-    sem_t *view_semaphore = sem_open(VIEW_SEMAPHORE_NAME, 0); // Open existing semaphore
-    if (view_semaphore == SEM_FAILED) {
-        perror("sem_open (view_semaphore)");
+    
+    sem_t *avail_semaphore = sem_open(AVAIL_SEMAPHORE_NAME, 0); // Open existing semaphore
+    if (avail_semaphore == SEM_FAILED) {
+        perror("sem_open (avail_semaphore)");
         exit(EXIT_FAILURE);
     }
-
-    sem_post(view_semaphore);
 
     char child_md5[CHILD_QTY][MAX_MD5 + 1];
     pid_t child_pid[CHILD_QTY];
@@ -124,9 +123,10 @@ int main(int argc, const char *argv[]) {
     }
     distribute_files(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
     int current_file_index = 0;
-
+    int info_length=strlen(INFO_TEXT)+MAX_MD5+MAX_PATH+2;
 
    while (current_file_index < argc) {
+    
         fd_set readfds;
         FD_ZERO(&readfds);
         int max_fd = -1;
@@ -143,7 +143,7 @@ int main(int argc, const char *argv[]) {
             perror("select");
             exit(EXIT_FAILURE);
         }
-
+        sem_wait(shm_semaphore);
         for (int i = 0; i < CHILD_QTY; i++) {
             if (FD_ISSET(child_to_parent_pipe[i][0], &readfds)) {
                 // Read MD5 hash from the child
@@ -158,14 +158,12 @@ int main(int argc, const char *argv[]) {
                     FD_CLR(child_to_parent_pipe[i][0], &readfds);
                 } 
                 else {
-                    sem_wait(app_semaphore);
                     // printf("PID:%d Received MD5 hash of file %s from child %d: %s\n", child_pid[i], argv[current_file_index], i, child_md5[i]);
-                    sprintf(shared_memory, "PID:%d FILE:%s MD5:%s\n", child_pid[i], argv[current_file_index], child_md5[i]);
-                    // Write data to shared memory with semaphore
+                    sprintf(shared_memory+current_file_index*info_length, INFO_TEXT, child_pid[i], argv[current_file_index], child_md5[i]);
                     //strcpy(shared_memory, child_md5[i]);
-                    sem_post(view_semaphore);
-
+                    
                     current_file_index++; // Move to the next file
+                    sem_post(avail_semaphore);
 
                     if (current_file_index < argc) {
                         pipe_write(parent_to_child_pipe[i][1], argv[current_file_index]);
@@ -177,13 +175,13 @@ int main(int argc, const char *argv[]) {
                 }
             }
         }
+        sprintf(shared_memory+current_file_index*info_length, "\n");
+        sem_post(shm_semaphore);
     }
-    shared_memory[0] = '\0';
+    sprintf(shared_memory+current_file_index*info_length, "\t");
 
 
 
-    // Signal view process that all files are processed
-    sem_post(view_semaphore);
 
     // Wait for child processes to finish
     for (int i = 0; i < CHILD_QTY; i++) {
@@ -192,10 +190,11 @@ int main(int argc, const char *argv[]) {
     }
 
     // Close and unlink semaphores
-    sem_close(app_semaphore);
-    sem_close(view_semaphore);
-    sem_unlink(APP_SEMAPHORE_NAME);
-    sem_unlink(VIEW_SEMAPHORE_NAME);
+    sem_close(shm_semaphore);
+    sem_unlink(SHM_SEMAPHORE_NAME);
+
+    sem_close(avail_semaphore);
+    sem_unlink(AVAIL_SEMAPHORE_NAME);
 
     // Close and unlink shared memory
     close(shm_fd);
@@ -218,7 +217,9 @@ void distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2
     }
 }
 
+void print_in_shm(int idx, int pid, char * path, char * md5){
 
+}
 
 
 
