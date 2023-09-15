@@ -28,7 +28,7 @@ void distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2
 void print_in_shm(int idx, int pid, char * path, char * md5);
 
 int main(int argc, const char *argv[]) {
-    
+    int vision_opened=0;
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <file_path>\n", argv[0]);
         exit(EXIT_FAILURE);
@@ -53,13 +53,22 @@ int main(int argc, const char *argv[]) {
     sem_t *shm_semaphore = sem_open(SHM_SEMAPHORE_NAME, 1); // Open existing semaphore
     if (shm_semaphore == SEM_FAILED) {
         perror("sem_open (shm_semaphore)");
-        exit(EXIT_FAILURE);
+        printf("No view detected\n");
+    } else {
+        vision_opened++;
     }
 
     
     sem_t *avail_semaphore = sem_open(AVAIL_SEMAPHORE_NAME, 0); // Open existing semaphore
     if (avail_semaphore == SEM_FAILED) {
         perror("sem_open (avail_semaphore)");
+        printf("No view detected\n");
+    } else {
+        vision_opened++;
+    }
+
+    if(vision_opened==1){
+        perror("missing 1 semaphore");
         exit(EXIT_FAILURE);
     }
 
@@ -143,7 +152,9 @@ int main(int argc, const char *argv[]) {
             perror("select");
             exit(EXIT_FAILURE);
         }
-        sem_wait(shm_semaphore);
+        if(vision_opened==2){
+            sem_wait(shm_semaphore);
+        }
         for (int i = 0; i < CHILD_QTY; i++) {
             if (FD_ISSET(child_to_parent_pipe[i][0], &readfds)) {
                 // Read MD5 hash from the child
@@ -176,8 +187,10 @@ int main(int argc, const char *argv[]) {
             }
         }
         sprintf(shared_memory+current_file_index*info_length, "\n");
-        sem_post(shm_semaphore);
-        sem_post(avail_semaphore);
+        if(vision_opened==2){
+            sem_post(shm_semaphore);
+            sem_post(avail_semaphore);
+        }
     }
     sprintf(shared_memory+current_file_index*info_length, "\t");
 

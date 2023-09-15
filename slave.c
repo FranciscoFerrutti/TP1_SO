@@ -28,7 +28,7 @@ int main() {
             exit(EXIT_FAILURE);
         }
 
-        fgets(md5, MAX_MD5 + 1, fp);
+        fgets(md5, MAX_MD5, fp);
         md5[MAX_MD5] = '\0';
         pclose(fp);
 

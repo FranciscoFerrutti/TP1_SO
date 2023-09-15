@@ -48,11 +48,6 @@ int main() {
 
     int info_length=0;
     while (1) {
-        // Wait for the application to write data to shared memory
-        // Process the received data (MD5 hash)
-        // char md5[MAX_MD5 + 1];
-        // strncpy(md5, shared_memory, MAX_MD5);
-        // md5[MAX_MD5] = '\0';
         
         sem_wait(avail_semaphore);
         
@@ -70,12 +65,10 @@ int main() {
             sem_post(shm_semaphore);
             break;
         }
-        // Signal the application that data has been read
         sem_post(shm_semaphore);
 
     }
 
-    // Cleanup: Close shared memory and semaphores
     close(shm_fd);
     sem_close(shm_semaphore);
     sem_close(avail_semaphore);
