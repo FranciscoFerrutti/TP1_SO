@@ -24,7 +24,6 @@
 
 // Function to distribute files to slaves
 int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
-void print_in_shm(int idx, int pid, char * path, char * md5);
 
 int main(int argc, const char *argv[]) {
     int vision_opened=0;
@@ -233,6 +232,3 @@ int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2]
     return files_assigned;
 }
 
-void print_in_shm(int idx, int pid, char * path, char * md5){
-        
-}
