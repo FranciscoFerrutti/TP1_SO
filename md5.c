@@ -16,15 +16,14 @@
 // Constants
 #define CHILD_QTY 5
 #define INITIAL_FILES_PER_CHILD 2
-#define MAX_MD5 32
 #define SHARED_MEMORY_SIZE 100000
 #define SHARED_MEMORY_NAME "/my_shared_memory"
 #define SHM_SEMAPHORE_NAME "/shm_semaphore"
 #define AVAIL_SEMAPHORE_NAME "/avail_semaphore"
-#define INFO_TEXT "PID:%d - FILE:%s - MD5:%s"
+#define INFO_TEXT "PID:%d - %s"
 
 // Function to distribute files to slaves
-void distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
+int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
 void print_in_shm(int idx, int pid, char * path, char * md5);
 
 int main(int argc, const char *argv[]) {
@@ -72,7 +71,7 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    char child_md5[CHILD_QTY][MAX_MD5 + 1];
+    char child_md5[CHILD_QTY][MAX_MD5 + MAX_PATH + 4];
     pid_t child_pid[CHILD_QTY];
     int parent_to_child_pipe[CHILD_QTY][2];
     int child_to_parent_pipe[CHILD_QTY][2];
@@ -82,7 +81,11 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-
+    FILE *resultado_file = fopen("resultado.txt", "wr");
+    if (resultado_file == NULL) {
+        perror("fopen(resultado.txt)");
+        exit(EXIT_FAILURE);
+    }
 
 
 
@@ -130,7 +133,7 @@ int main(int argc, const char *argv[]) {
         }
         FD_SET(child_to_parent_pipe[i][0], &readfds); // Add slave pipes to the set
     }
-    distribute_files(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
+    int files_assigned = distribute_files(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
     int current_file_index = 0;
     int info_length=strlen(INFO_TEXT)+MAX_MD5+MAX_PATH+2;
 
@@ -170,19 +173,23 @@ int main(int argc, const char *argv[]) {
                 } 
                 else {
                     // printf("PID:%d Received MD5 hash of file %s from child %d: %s\n", child_pid[i], argv[current_file_index], i, child_md5[i]);
-                    sprintf(shared_memory+current_file_index*info_length, INFO_TEXT, child_pid[i], argv[current_file_index], child_md5[i]);
+                     fprintf(resultado_file, INFO_TEXT "\n", child_pid[i], child_md5[i]);
+                     fflush(resultado_file); // Flush the file buffer
+                    sprintf(shared_memory+current_file_index*info_length, INFO_TEXT, child_pid[i], child_md5[i]);
+                  
+                   // printf("%d - %s \n", child_pid[i], child_md5[i]);
+
+                    //printf("%d files_assigned  %d current_file_index   %d\n", files_assigned, current_file_index, argc);
+                    if(files_assigned < argc) {
+                        pipe_write(parent_to_child_pipe[i][1], argv[files_assigned++]);  
+                    }
+                    else{
+                        close(parent_to_child_pipe[i][1]);
+                    }
                     //strcpy(shared_memory, child_md5[i]);
                     
                     current_file_index++; // Move to the next file
-                    
-
-                    if (current_file_index < argc) {
-                        pipe_write(parent_to_child_pipe[i][1], argv[current_file_index]);
-                    } 
-                    else {
-                        // No more files to assign, signal to exit
-                        close(parent_to_child_pipe[i][1]);
-                    }
+                
                 }
             }
         }
@@ -193,7 +200,6 @@ int main(int argc, const char *argv[]) {
         }
     }
     sprintf(shared_memory+current_file_index*info_length, "\t");
-
 
 
 
@@ -216,30 +222,17 @@ int main(int argc, const char *argv[]) {
     return EXIT_SUCCESS;
 }
 
-void distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]) {
+int distribute_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]) {
     int files_assigned = 0;
-    
     for (int child_index = 0; child_index < CHILD_QTY; child_index++) {
-        for (int i = child_index; i < argc; i += CHILD_QTY) {
+        for (int i=0; i < INITIAL_FILES_PER_CHILD ; i ++) {
             // Distribute files to child processes in a round-robin manner
-            pipe_write(parent_to_child_pipe[child_index][1], argv[i]);
-            files_assigned++;
+            pipe_write(parent_to_child_pipe[child_index][1], argv[files_assigned++]);  
         }
-        
-        // Close write end of the pipe for this child to signal the end of file distribution
-        close(parent_to_child_pipe[child_index][1]);
     }
+    return files_assigned;
 }
 
 void print_in_shm(int idx, int pid, char * path, char * md5){
-
+        
 }
-
-
-
-
-
-
-
-
-

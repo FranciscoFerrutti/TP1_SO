@@ -3,7 +3,7 @@
 
 int main() {
     char path[MAX_PATH] = {0};
-    char md5[MAX_MD5 + 1];
+    char md5[MAX_MD5 + MAX_PATH+ 1];
     char *md5_cmd = "md5sum ./%s";
     char command[MAX_PATH + strlen(md5_cmd)];
     int ready = 1;
@@ -28,8 +28,8 @@ int main() {
             exit(EXIT_FAILURE);
         }
 
-        fgets(md5, MAX_MD5, fp);
-        md5[MAX_MD5] = '\0';
+        fgets(md5, MAX_MD5+strlen(path)+5, fp);
+        md5[MAX_MD5+strlen(path)+6] = '\0';
         pclose(fp);
 
         // Write the MD5 hash to the parent process
