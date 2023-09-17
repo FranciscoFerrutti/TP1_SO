@@ -40,7 +40,6 @@ int main(int argc, const char *argv[]) {
     int child_to_parent_pipe[CHILD_QTY][2];
     char child_md5[CHILD_QTY][MAX_MD5 + MAX_PATH + 4];
     int files_assigned;
-    argc--;//we won't hash the ./md5
 
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <file_path>\n", argv[0]);
@@ -143,6 +142,7 @@ char *shared_memory, FILE *resultado_file, int *vision_opened) {
     fd_set readfds;
     int max_fd = -1;
     int current_file_index = 0;
+    int total_files_to_process=argc-1;
     int info_length = strlen(INFO_TEXT) + MAX_MD5 + MAX_PATH + 2;
 
     for (int i = 0; i < CHILD_QTY; i++) {
@@ -152,7 +152,7 @@ char *shared_memory, FILE *resultado_file, int *vision_opened) {
         FD_SET(child_to_parent_pipe[i][0], &readfds);
     }
 
-    while (current_file_index < argc) {
+    while (current_file_index < total_files_to_process) {
         fd_set readfds;
         FD_ZERO(&readfds);
         int max_fd = -1;
@@ -228,9 +228,11 @@ void cleanup(sem_t *shm_semaphore, sem_t *avail_semaphore, int shm_fd, pid_t chi
 
 int distribute_initial_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]) {
     
+    int total_files_to_process=argc-1;
+
     int files_assigned = 1;
-    for(int i=0; i<INITIAL_FILES_PER_CHILD && i*CHILD_QTY<argc; i++){
-        for(int child_index=0; child_index<CHILD_QTY && i*CHILD_QTY+child_index<argc; child_index++){
+    for(int i=0; i<INITIAL_FILES_PER_CHILD && i*CHILD_QTY<total_files_to_process; i++){
+        for(int child_index=0; child_index<CHILD_QTY && i*CHILD_QTY+child_index<total_files_to_process; child_index++){
             pipe_write(parent_to_child_pipe[child_index][1], argv[files_assigned++]);
         }
     }
