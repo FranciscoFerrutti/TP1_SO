@@ -25,3 +25,7 @@ vision
 
 #testing folder
 files
+
+#PVS-Studio
+*.lesshst
+*.config
