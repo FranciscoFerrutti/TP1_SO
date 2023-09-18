@@ -1,34 +1,19 @@
 // This is a personal academic project. Dear PVS-Studio, please check it.
 
 // PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
-#include "pipe_manager.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/select.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <semaphore.h>
-#include <errno.h>
 
-// Constants
+#include "commons.h"
+#include "pipe_manager.h"
+#include "shared_memory.h"
+
 #define CHILD_QTY 5
 #define INITIAL_FILES_PER_CHILD 2
-#define SHARED_MEMORY_SIZE 100000
-#define SHARED_MEMORY_NAME "/my_shared_memory"
-#define SHM_SEMAPHORE_NAME "/shm_semaphore"
-#define AVAIL_SEMAPHORE_NAME "/avail_semaphore"
-//#define INFO_TEXT "PID:%d - %s"
 #define INFO_TEXT "PID:%d - %s"
 
-void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_semaphore, sem_t **avail_semaphore, int *vision_opened, FILE **resultado_file);
+void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_mutex_sem, sem_t **switch_sem, int *vision_opened, FILE **resultado_file);
 void create_pipes_and_children(int parent_to_child_pipe[CHILD_QTY][2], int child_to_parent_pipe[CHILD_QTY][2], pid_t child_pid[CHILD_QTY]);
-void handle_select_and_pipes(int argc, const char *argv[], int parent_to_child_pipe[CHILD_QTY][2], int child_to_parent_pipe[CHILD_QTY][2], int *files_assigned, pid_t child_pid[CHILD_QTY], char child_md5[CHILD_QTY][MAX_MD5 + MAX_PATH + 4], sem_t *shm_semaphore, sem_t *avail_semaphore, char *shared_memory, FILE *resultado_file, int *vision_opened);
-void cleanup(sem_t *shm_semaphore, sem_t *avail_semaphore, int shm_fd, pid_t child_pid[CHILD_QTY], int parent_to_child_pipe[CHILD_QTY][2]);
+void handle_select_and_pipes(int argc, const char *argv[], int parent_to_child_pipe[CHILD_QTY][2], int child_to_parent_pipe[CHILD_QTY][2], int *files_assigned, pid_t child_pid[CHILD_QTY], char child_md5[CHILD_QTY][MAX_MD5 + MAX_PATH + 4], sem_t *shm_mutex_sem, sem_t *switch_sem, char *shared_memory, FILE *resultado_file, int *vision_opened);
+void cleanup(sem_t *shm_mutex_sem, sem_t *switch_sem, int shm_fd, pid_t child_pid[CHILD_QTY], int parent_to_child_pipe[CHILD_QTY][2]);
 int distribute_initial_files(int argc, const char *argv[], int parent_to_child_pipe[][2], int child_to_parent_pipe[][2]);
 
 
@@ -39,8 +24,8 @@ int main(int argc, const char *argv[]) {
      if (!isatty(STDOUT_FILENO)) {
         pipe_write(STDOUT_FILENO, SHARED_MEMORY_NAME);
     }
-    sem_t *shm_semaphore;
-    sem_t *avail_semaphore;
+    sem_t *shm_mutex_sem;
+    sem_t *switch_sem;
     FILE *resultado_file;
     pid_t child_pid[CHILD_QTY];
     int parent_to_child_pipe[CHILD_QTY][2];
@@ -53,16 +38,16 @@ int main(int argc, const char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    initialize_resources(&shm_fd, &shared_memory, &shm_semaphore, &avail_semaphore, &vision_opened, &resultado_file);
+    initialize_resources(&shm_fd, &shared_memory, &shm_mutex_sem, &switch_sem, &vision_opened, &resultado_file);
     create_pipes_and_children(parent_to_child_pipe, child_to_parent_pipe, child_pid);
     files_assigned = distribute_initial_files(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
-    handle_select_and_pipes(argc, argv, parent_to_child_pipe, child_to_parent_pipe, &files_assigned, child_pid, child_md5, shm_semaphore, avail_semaphore, shared_memory, resultado_file, &vision_opened);
-    cleanup(shm_semaphore, avail_semaphore, shm_fd, child_pid, parent_to_child_pipe);
+    handle_select_and_pipes(argc, argv, parent_to_child_pipe, child_to_parent_pipe, &files_assigned, child_pid, child_md5, shm_mutex_sem, switch_sem, shared_memory, resultado_file, &vision_opened);
+    cleanup(shm_mutex_sem, switch_sem, shm_fd, child_pid, parent_to_child_pipe);
 
     return 0;
 }
 
-void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_semaphore, sem_t **avail_semaphore, int *vision_opened, FILE **resultado_file) {
+void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_mutex_sem, sem_t **switch_sem, int *vision_opened, FILE **resultado_file) {
     
     *shm_fd = shm_open(SHARED_MEMORY_NAME, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
     if (*shm_fd == -1) {
@@ -78,16 +63,16 @@ void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_semapho
     
     sleep(2);
 
-    *shm_semaphore = sem_open(SHM_SEMAPHORE_NAME, 1); // Open existing semaphore
-    if (*shm_semaphore == SEM_FAILED) {
-        // perror("sem_open (shm_semaphore)");
+    *shm_mutex_sem = sem_open(SHM_SEM_NAME, 1); // Open existing semaphore
+    if (*shm_mutex_sem == SEM_FAILED) {
+        // perror("sem_open (shm_mutex_sem)");
     } else {
         (*vision_opened)++;
     }
 
-    *avail_semaphore = sem_open(AVAIL_SEMAPHORE_NAME, 0); // Open existing semaphore
-    if (*avail_semaphore == SEM_FAILED) {
-        // perror("sem_open (avail_semaphore)");
+    *switch_sem = sem_open(SWITCH_SEM_NAME, 0); // Open existing semaphore
+    if (*switch_sem == SEM_FAILED) {
+        // perror("sem_open (switch_sem)");
     } else {
         (*vision_opened)++;
     }
@@ -145,7 +130,7 @@ void create_pipes_and_children(int parent_to_child_pipe[CHILD_QTY][2], int child
 }
 
 void handle_select_and_pipes(int argc, const char *argv[], int parent_to_child_pipe[CHILD_QTY][2], int child_to_parent_pipe[CHILD_QTY][2], 
-int *files_assigned, pid_t child_pid[CHILD_QTY], char child_md5[CHILD_QTY][MAX_MD5 + MAX_PATH + 4], sem_t *shm_semaphore, sem_t *avail_semaphore, 
+int *files_assigned, pid_t child_pid[CHILD_QTY], char child_md5[CHILD_QTY][MAX_MD5 + MAX_PATH + 4], sem_t *shm_mutex_sem, sem_t *switch_sem, 
 char *shared_memory, FILE *resultado_file, int *vision_opened) {
     fd_set readfds;
     int max_fd = -1;
@@ -179,7 +164,7 @@ char *shared_memory, FILE *resultado_file, int *vision_opened) {
         }
 
         if (*vision_opened == 2) {
-            sem_wait(shm_semaphore);
+            sem_wait(shm_mutex_sem);
         }
 
         for (int i = 0; i < CHILD_QTY; i++) {
@@ -210,14 +195,14 @@ char *shared_memory, FILE *resultado_file, int *vision_opened) {
 
         sprintf(shared_memory + current_file_index * info_length, "\n");
         if (*vision_opened == 2) {
-            sem_post(shm_semaphore);
-            sem_post(avail_semaphore);
+            sem_post(shm_mutex_sem);
+            sem_post(switch_sem);
         }
     }
     sprintf(shared_memory + current_file_index * info_length, "\t");
 }
 
-void cleanup(sem_t *shm_semaphore, sem_t *avail_semaphore, int shm_fd, pid_t child_pid[CHILD_QTY], int parent_to_child_pipe[CHILD_QTY][2]) {
+void cleanup(sem_t *shm_mutex_sem, sem_t *switch_sem, int shm_fd, pid_t child_pid[CHILD_QTY], int parent_to_child_pipe[CHILD_QTY][2]) {
     for (int i = 0; i < CHILD_QTY; i++) {
         close(parent_to_child_pipe[i][1]);
     }
@@ -226,11 +211,11 @@ void cleanup(sem_t *shm_semaphore, sem_t *avail_semaphore, int shm_fd, pid_t chi
         waitpid(child_pid[i], NULL, 0);
     }
     
-    sem_close(shm_semaphore);
-    sem_unlink(SHM_SEMAPHORE_NAME);
+    sem_close(shm_mutex_sem);
+    sem_unlink(SHM_SEM_NAME);
 
-    sem_close(avail_semaphore);
-    sem_unlink(AVAIL_SEMAPHORE_NAME);
+    sem_close(switch_sem);
+    sem_unlink(SWITCH_SEM_NAME);
 
     close(shm_fd);
     shm_unlink(SHARED_MEMORY_NAME);

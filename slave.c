@@ -2,6 +2,8 @@
 
 // PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 //slave.c
+
+#include "commons.h"
 #include "pipe_manager.h"
 
 #define OFFSET 5

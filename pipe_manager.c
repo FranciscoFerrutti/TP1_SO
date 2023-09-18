@@ -2,7 +2,7 @@
 
 // PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 
-//pipe_manager.c
+#include "commons.h"
 #include "pipe_manager.h"
 
 int pipe_write(int fd, const char *buff){
