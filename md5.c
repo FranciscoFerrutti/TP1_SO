@@ -191,7 +191,8 @@ char *shared_memory, FILE *resultado_file, int *vision_opened) {
                     fprintf(resultado_file, INFO_TEXT "\n", child_pid[i], child_md5[i], argv[current_file_index + 1]);
                     //fprintf(resultado_file, INFO_TEXT "\n", child_pid[i], child_md5[i]);
                     fflush(resultado_file);
-                    sprintf(shared_memory + current_file_index * info_length, INFO_TEXT, child_pid[i], child_md5[i], argv[current_file_index + 1]);   
+                    snprintf(shared_memory + current_file_index * info_length, info_length, INFO_TEXT, child_pid[i], child_md5[i], argv[current_file_index + 1]);
+                    //sprintf(shared_memory + current_file_index * info_length, INFO_TEXT, child_pid[i], child_md5[i], argv[current_file_index + 1]);   
                     //sprintf(shared_memory + current_file_index * info_length, INFO_TEXT, child_pid[i], child_md5[i]);
 
                     if (*files_assigned < argc) {

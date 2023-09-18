@@ -13,6 +13,7 @@ clean:
 	rm -f slave.elf md5.elf vision.elf resultado.txt PVS-Studio.log report.tasks strace_out
 	rm -r .config
 
+#Si tienen problemas al hacer make pvs-studio, hagan un make clean y vuelvan a intentar
 pvs-studio:
 	pvs-studio-analyzer credentials PVS-Studio Free FREE-FREE-FREE-FREE
 	pvs-studio-analyzer trace -- make -j8
