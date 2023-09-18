@@ -1,3 +1,5 @@
+.gitignore
+
 #Binary Files
 *.bin
 *.sys
@@ -22,9 +24,6 @@ docker_build_command.sh
 #compiling files
 md5
 vision
-
-#testing folder
-files
 
 #PVS-Studio
 *.lesshst
