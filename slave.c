@@ -6,12 +6,12 @@
 #include "commons.h"
 #include "pipe_manager.h"
 
-#define OFFSET 5
+#define OFFSET 3
 
 int main() {
     char path[MAX_PATH] = {0};
     char md5[MAX_MD5 + MAX_PATH + OFFSET + 1];
-    char *md5_cmd = "md5sum ./%s";
+    char *md5_cmd = "md5sum %s";
     char command[MAX_PATH + strlen(md5_cmd)];
     int ready = 1;
 
