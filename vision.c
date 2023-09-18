@@ -21,6 +21,8 @@
 #define MAX_MD5 32
 #define MAX_PATH 80
 
+#define PATH_LIMITATION_ERROR "PATH LENGTH EXCEEDS LIMIT (80 char) - TERMINATING\n"
+
 // Function to initialize semaphores
 sem_t *initializeSemaphore(const char *name, int value) {
     sem_t *sem = sem_open(name, O_CREAT, 0666, value);
@@ -33,13 +35,12 @@ sem_t *initializeSemaphore(const char *name, int value) {
 
 // Function to create and map shared memory
 char *createSharedMemory(const char * sh_mem_name, int *shm_fd) {
-    
     *shm_fd = shm_open(sh_mem_name, O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
     if (*shm_fd == -1) {
         perror("shm_open");
+        printf("No MD5 program active.\n");
         exit(EXIT_FAILURE);
     }
-    
     char *shared_memory = mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ, MAP_SHARED, *shm_fd, 0);
     if (shared_memory == MAP_FAILED) {
         perror("mmap");
@@ -91,6 +92,10 @@ int main(int argc, char * argv[]) {
     }
     else {
         pipe_read(STDIN_FILENO, shm_name);
+        if (shm_name[0] == '\0'){
+            printf(PATH_LIMITATION_ERROR);
+            exit(1);
+        }
         shared_memory = createSharedMemory(shm_name, &shm_fd);
     }
     // // Read and display shared memory data

@@ -15,6 +15,8 @@
 #include <semaphore.h>
 #include <errno.h>
 
+
+
 // Constants
 #define CHILD_QTY 5
 #define INITIAL_FILES_PER_CHILD 2
@@ -22,9 +24,12 @@
 #define SHARED_MEMORY_NAME "/my_shared_memory"
 #define SHM_SEMAPHORE_NAME "/shm_semaphore"
 #define AVAIL_SEMAPHORE_NAME "/avail_semaphore"
+
+#define PATH_LIMITATION_ERROR "PATH LENGTH EXCEEDS LIMIT (80 char) - TERMINATING\n"
+
 //#define INFO_TEXT "PID:%d - %s"
 #define INFO_TEXT "PID:%d - %s"
-
+void check_paths_limitation(int argc, const char * argv[]);
 void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_semaphore, sem_t **avail_semaphore, int *vision_opened, FILE **resultado_file);
 void create_pipes_and_children(int parent_to_child_pipe[CHILD_QTY][2], int child_to_parent_pipe[CHILD_QTY][2], pid_t child_pid[CHILD_QTY]);
 void handle_select_and_pipes(int argc, const char *argv[], int parent_to_child_pipe[CHILD_QTY][2], int child_to_parent_pipe[CHILD_QTY][2], int *files_assigned, pid_t child_pid[CHILD_QTY], char child_md5[CHILD_QTY][MAX_MD5 + MAX_PATH + 4], sem_t *shm_semaphore, sem_t *avail_semaphore, char *shared_memory, FILE *resultado_file, int *vision_opened);
@@ -33,10 +38,11 @@ int distribute_initial_files(int argc, const char *argv[], int parent_to_child_p
 
 
 int main(int argc, const char *argv[]) {
+    check_paths_limitation(argc, argv);
     int vision_opened = 0;
     int shm_fd;
     char *shared_memory;
-     if (!isatty(STDOUT_FILENO)) {
+    if (!isatty(STDOUT_FILENO)) {
         pipe_write(STDOUT_FILENO, SHARED_MEMORY_NAME);
     }
     sem_t *shm_semaphore;
@@ -52,7 +58,6 @@ int main(int argc, const char *argv[]) {
         fprintf(stderr, "Usage: %s <file_path>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-
     initialize_resources(&shm_fd, &shared_memory, &shm_semaphore, &avail_semaphore, &vision_opened, &resultado_file);
     create_pipes_and_children(parent_to_child_pipe, child_to_parent_pipe, child_pid);
     files_assigned = distribute_initial_files(argc, argv, parent_to_child_pipe, child_to_parent_pipe);
@@ -60,6 +65,20 @@ int main(int argc, const char *argv[]) {
     cleanup(shm_semaphore, avail_semaphore, shm_fd, child_pid, parent_to_child_pipe);
 
     return 0;
+}
+
+void check_paths_limitation(int argc, const char * argv[]){
+    for (int i = 1; i < argc; i++ ){
+        if (strlen(argv[i]) > MAX_PATH){
+            if (!isatty(STDOUT_FILENO)) {
+                pipe_write(STDOUT_FILENO, "\0");
+            }
+            else {
+                printf("PATH LENGTH EXCEEDS LIMIT (80 char) - TERMINATING\n");
+            }
+            exit(1);
+        }
+    }
 }
 
 void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_semaphore, sem_t **avail_semaphore, int *vision_opened, FILE **resultado_file) {
