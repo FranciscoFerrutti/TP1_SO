@@ -5,7 +5,7 @@
 #include "commons.h"
 #include "shared_memory.h"
 #include "pipe_manager.h"
-
+#define PATH_LIMITATION_ERROR "PATH LENGTH EXCEEDS LIMIT (80 char) - TERMINATING\n"
 sem_t *initialize_semaphore(const char *name, int value);
 char *create_shared_memory(const char * sh_mem_name, int *shm_fd);
 void read_shared_memory(sem_t *shm_mutex_sem, sem_t *switch_sem, char *shared_memory);
@@ -25,9 +25,9 @@ char *create_shared_memory(const char * sh_mem_name, int *shm_fd) {
     *shm_fd = shm_open(sh_mem_name, O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
     if (*shm_fd == -1) {
         perror("shm_open");
+        printf("No MD5 program active.\n");
         exit(EXIT_FAILURE);
     }
-    
     char *shared_memory = mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ, MAP_SHARED, *shm_fd, 0);
     if (shared_memory == MAP_FAILED) {
         perror("mmap");
@@ -78,6 +78,10 @@ int main(int argc, char * argv[]) {
     }
     else {
         pipe_read(STDIN_FILENO, shm_name);
+        if (shm_name[0] == '\0'){
+            printf(PATH_LIMITATION_ERROR);
+            exit(1);
+        }
         shared_memory = create_shared_memory(shm_name, &shm_fd);
     }
     
