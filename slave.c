@@ -1,3 +1,6 @@
+// This is a personal academic project. Dear PVS-Studio, please check it.
+
+// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
 //slave.c
 #include "pipe_manager.h"
 
@@ -27,9 +30,10 @@ int main() {
             perror("popen");
             exit(EXIT_FAILURE);
         }
-
-        fgets(md5, MAX_MD5+strlen(path)+5, fp);
-        md5[MAX_MD5+strlen(path)+6] = '\0';
+        fgets(md5, MAX_MD5 , fp);
+        //fgets(md5, MAX_MD5+strlen(path)+5, fp);
+        md5[MAX_MD5] = '\0';
+        //md5[MAX_MD5+strlen(path)+6] = '\0';
         pclose(fp);
 
         // Write the MD5 hash to the parent process
