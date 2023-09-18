@@ -56,9 +56,10 @@ void check_paths_limitation(int argc, const char * argv[]){
         if (strlen(argv[i]) > MAX_PATH){
             if (!isatty(STDOUT_FILENO)) {
                 pipe_write(STDOUT_FILENO, "\0");
+            } else {
+                printf(PATH_LIMITATION_ERROR);
             }
-            printf(PATH_LIMITATION_ERROR);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     }
 }
@@ -79,17 +80,13 @@ void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_mutex_s
     
     sleep(2);
 
-    *shm_mutex_sem = sem_open(SHM_SEM_NAME, 1); // Open existing semaphore
-    if (*shm_mutex_sem == SEM_FAILED) {
-        // perror("sem_open (shm_mutex_sem)");
-    } else {
+    *shm_mutex_sem = sem_open(SHM_SEM_NAME, 1);
+    if (*shm_mutex_sem != SEM_FAILED) {
         (*vision_opened)++;
     }
 
-    *switch_sem = sem_open(SWITCH_SEM_NAME, 0); // Open existing semaphore
-    if (*switch_sem == SEM_FAILED) {
-        // perror("sem_open (switch_sem)");
-    } else {
+    *switch_sem = sem_open(SWITCH_SEM_NAME, 0);
+    if (*switch_sem != SEM_FAILED) {
         (*vision_opened)++;
     }
 
@@ -136,11 +133,6 @@ void create_pipes_and_children(int parent_to_child_pipe[CHILD_QTY][2], int child
 
             char *args[] = {"./slave.elf", NULL};
             execve(args[0], args, NULL);
-            perror("execve");
-            
-            //when returned, all files were hased. So now we gotta close the child's file descriptors
-            
-            exit(EXIT_SUCCESS);
         }
     }
 }
@@ -194,11 +186,9 @@ char *shared_memory, FILE *resultado_file, int *vision_opened) {
                     FD_CLR(child_to_parent_pipe[i][0], &readfds);
                 } else {
                     fprintf(resultado_file, INFO_TEXT "\n", child_pid[i], child_md5[i]);
-                    //fprintf(resultado_file, INFO_TEXT "\n", child_pid[i], child_md5[i]);
                     fflush(resultado_file);
+                    
                     snprintf(shared_memory + current_file_index * info_length, info_length, INFO_TEXT, child_pid[i], child_md5[i]);
-                    //sprintf(shared_memory + current_file_index * info_length, INFO_TEXT, child_pid[i], child_md5[i], argv[current_file_index + 1]);   
-                    //sprintf(shared_memory + current_file_index * info_length, INFO_TEXT, child_pid[i], child_md5[i]);
 
                     if (*files_assigned < argc) {
                         pipe_write(parent_to_child_pipe[i][1], argv[(*files_assigned)++]);
