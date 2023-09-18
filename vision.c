@@ -20,7 +20,7 @@
 #define SHARED_MEMORY_SIZE 100000
 #define MAX_MD5 32
 #define MAX_PATH 80
-
+#define MAX_ERR 80
 #define PATH_LIMITATION_ERROR "PATH LENGTH EXCEEDS LIMIT (80 char) - TERMINATING\n"
 
 // Function to initialize semaphores
@@ -46,7 +46,6 @@ char *createSharedMemory(const char * sh_mem_name, int *shm_fd) {
         perror("mmap");
         exit(EXIT_FAILURE);
     }
-
     return shared_memory;
 }
 
@@ -86,14 +85,16 @@ int main(int argc, char * argv[]) {
     // printf("ASDASDASD");
     char *shared_memory;
     char shm_name[MAX_PATH] = {0};
-
+    char err_buff[MAX_ERR] = {0};
     if (argc > 1){
         shared_memory = createSharedMemory(argv[1], &shm_fd);
     }
     else {
         pipe_read(STDIN_FILENO, shm_name);
+        
         if (shm_name[0] == '\0'){
-            printf(PATH_LIMITATION_ERROR);
+            pipe_read(STDIN_FILENO, err_buff);
+            printf(err_buff);
             exit(1);
         }
         shared_memory = createSharedMemory(shm_name, &shm_fd);
