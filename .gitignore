@@ -1,5 +1,3 @@
-.gitignore
-
 #Binary Files
 *.bin
 *.sys
@@ -31,3 +29,8 @@ vision
 
 #output files
 *.txt
+
+#git and bash
+.bash_history
+.gitconfig
+.lesshst
