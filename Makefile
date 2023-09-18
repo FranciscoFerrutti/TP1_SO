@@ -11,7 +11,7 @@ vision.elf: vision.c pipe_manager.c
 
 clean:
 	rm -f slave.elf md5.elf vision.elf resultado.txt PVS-Studio.log report.tasks strace_out
-	rm -r .config
+	rm -rf .config
 
 #Si tienen problemas al hacer make pvs-studio, hagan un make clean y vuelvan a intentar
 pvs-studio:
