@@ -80,16 +80,14 @@ void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_semapho
 
     *shm_semaphore = sem_open(SHM_SEMAPHORE_NAME, 1); // Open existing semaphore
     if (*shm_semaphore == SEM_FAILED) {
-        perror("sem_open (shm_semaphore)");
-        printf("No view detected\n");
+        // perror("sem_open (shm_semaphore)");
     } else {
         (*vision_opened)++;
     }
 
     *avail_semaphore = sem_open(AVAIL_SEMAPHORE_NAME, 0); // Open existing semaphore
     if (*avail_semaphore == SEM_FAILED) {
-        perror("sem_open (avail_semaphore)");
-        printf("No view detected\n");
+        // perror("sem_open (avail_semaphore)");
     } else {
         (*vision_opened)++;
     }
@@ -97,6 +95,8 @@ void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_semapho
     if (*vision_opened == 1) {
         perror("missing 1 semaphore");
         exit(EXIT_FAILURE);
+    } else if (*vision_opened == 0) {
+        printf("No view detected - No semaphore initialization\n");
     }
 
     if (ftruncate(*shm_fd, SHARED_MEMORY_SIZE) == -1) {
