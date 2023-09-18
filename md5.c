@@ -57,9 +57,7 @@ void check_paths_limitation(int argc, const char * argv[]){
             if (!isatty(STDOUT_FILENO)) {
                 pipe_write(STDOUT_FILENO, "\0");
             }
-            else {
-                printf("PATH LENGTH EXCEEDS LIMIT (80 char) - TERMINATING\n");
-            }
+            printf(PATH_LIMITATION_ERROR);
             exit(1);
         }
     }
