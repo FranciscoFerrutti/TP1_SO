@@ -23,7 +23,7 @@
 #define SHM_SEMAPHORE_NAME "/shm_semaphore"
 #define AVAIL_SEMAPHORE_NAME "/avail_semaphore"
 //#define INFO_TEXT "PID:%d - %s"
-#define INFO_TEXT "PID:%d - %s %s"
+#define INFO_TEXT "PID:%d - %s"
 
 void initialize_resources(int *shm_fd, char **shared_memory, sem_t **shm_semaphore, sem_t **avail_semaphore, int *vision_opened, FILE **resultado_file);
 void create_pipes_and_children(int parent_to_child_pipe[CHILD_QTY][2], int child_to_parent_pipe[CHILD_QTY][2], pid_t child_pid[CHILD_QTY]);
@@ -188,10 +188,10 @@ char *shared_memory, FILE *resultado_file, int *vision_opened) {
                     close(child_to_parent_pipe[i][0]);
                     FD_CLR(child_to_parent_pipe[i][0], &readfds);
                 } else {
-                    fprintf(resultado_file, INFO_TEXT "\n", child_pid[i], child_md5[i], argv[current_file_index + 1]);
+                    fprintf(resultado_file, INFO_TEXT "\n", child_pid[i], child_md5[i]);
                     //fprintf(resultado_file, INFO_TEXT "\n", child_pid[i], child_md5[i]);
                     fflush(resultado_file);
-                    snprintf(shared_memory + current_file_index * info_length, info_length, INFO_TEXT, child_pid[i], child_md5[i], argv[current_file_index + 1]);
+                    snprintf(shared_memory + current_file_index * info_length, info_length, INFO_TEXT, child_pid[i], child_md5[i]);
                     //sprintf(shared_memory + current_file_index * info_length, INFO_TEXT, child_pid[i], child_md5[i], argv[current_file_index + 1]);   
                     //sprintf(shared_memory + current_file_index * info_length, INFO_TEXT, child_pid[i], child_md5[i]);
 

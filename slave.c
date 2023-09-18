@@ -4,6 +4,8 @@
 //slave.c
 #include "pipe_manager.h"
 
+#define OFFSET 5
+
 int main() {
     char path[MAX_PATH] = {0};
     char md5[MAX_MD5 + MAX_PATH+ 1];
@@ -30,10 +32,10 @@ int main() {
             perror("popen");
             exit(EXIT_FAILURE);
         }
-        fgets(md5, MAX_MD5 , fp);
-        //fgets(md5, MAX_MD5+strlen(path)+5, fp);
-        md5[MAX_MD5] = '\0';
-        //md5[MAX_MD5+strlen(path)+6] = '\0';
+        // fgets(md5, MAX_MD5+MAX_PATH , fp);
+        fgets(md5, MAX_MD5+strlen(path)+OFFSET, fp);
+        // md5[MAX_MD5+MAX_PATH] = '\0';
+        md5[MAX_MD5+strlen(path)+OFFSET+1] = '\0';
         pclose(fp);
 
         // Write the MD5 hash to the parent process
