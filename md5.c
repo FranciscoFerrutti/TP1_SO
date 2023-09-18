@@ -8,7 +8,6 @@
 
 #define CHILD_QTY 5
 #define INITIAL_FILES_PER_CHILD 2
-#define PATH_LIMITATION_ERROR "PATH LENGTH EXCEEDS LIMIT (80 char) - TERMINATING\n"
 #define INFO_TEXT "PID:%d - %s"
 
 void check_paths_limitation(int argc, const char * argv[]);

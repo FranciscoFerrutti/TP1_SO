@@ -12,6 +12,6 @@
 #define SWITCH_SEM_NAME "/switch_sem"
 
 #define SHARED_MEMORY_SIZE 1048576 // 1MB
-
+#define PATH_LIMITATION_ERROR "PATH LENGTH EXCEEDS LIMIT (80 char) - TERMINATING\n"
 
 #endif

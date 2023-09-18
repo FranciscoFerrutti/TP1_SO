@@ -5,7 +5,7 @@
 #include "commons.h"
 #include "shared_memory.h"
 #include "pipe_manager.h"
-#define PATH_LIMITATION_ERROR "PATH LENGTH EXCEEDS LIMIT (80 char) - TERMINATING\n"
+
 sem_t *initialize_semaphore(const char *name, int value);
 char *create_shared_memory(const char * sh_mem_name, int *shm_fd);
 void read_shared_memory(sem_t *shm_mutex_sem, sem_t *switch_sem, char *shared_memory);
