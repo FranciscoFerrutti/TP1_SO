@@ -44,6 +44,8 @@ int main(int argc, const char *argv[]) {
     char *shared_memory;
     if (!isatty(STDOUT_FILENO)) {
         pipe_write(STDOUT_FILENO, SHARED_MEMORY_NAME);
+    } else {
+        printf("%s\n", SHARED_MEMORY_NAME);
     }
     sem_t *shm_semaphore;
     sem_t *avail_semaphore;
