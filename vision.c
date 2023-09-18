@@ -10,11 +10,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <semaphore.h>
+#include "pipe_manager.h"
+
 
 #define SHARED_MEMORY_NAME "/my_shared_memory"
 #define SHM_SEMAPHORE_NAME "/shm_semaphore"
 #define AVAIL_SEMAPHORE_NAME "/avail_semaphore"
-#define INFO_TEXT "PID:%d - FILE:%s - MD5:%s\n"
 
 #define SHARED_MEMORY_SIZE 100000
 #define MAX_MD5 32
@@ -31,8 +32,9 @@ sem_t *initializeSemaphore(const char *name, int value) {
 }
 
 // Function to create and map shared memory
-char *createSharedMemory(int *shm_fd) {
-    *shm_fd = shm_open(SHARED_MEMORY_NAME, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
+char *createSharedMemory(const char * sh_mem_name, int *shm_fd) {
+    
+    *shm_fd = shm_open(sh_mem_name, O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
     if (*shm_fd == -1) {
         perror("shm_open");
         exit(EXIT_FAILURE);
@@ -71,7 +73,7 @@ void readSharedMemory(sem_t *shm_semaphore, sem_t *avail_semaphore, char *shared
     }
 }
 
-int main() {
+int main(int argc, char * argv[]) {
     sem_unlink(AVAIL_SEMAPHORE_NAME);
     sem_unlink(SHM_SEMAPHORE_NAME);
 
@@ -80,10 +82,18 @@ int main() {
     sem_t *avail_semaphore = initializeSemaphore(AVAIL_SEMAPHORE_NAME, 0);
 
     int shm_fd;  // Declare shm_fd here
+    // printf("ASDASDASD");
+    char *shared_memory;
+    char shm_name[MAX_PATH] = {0};
 
-    char *shared_memory = createSharedMemory(&shm_fd);
-
-    // Read and display shared memory data
+    if (argc > 1){
+        shared_memory = createSharedMemory(argv[1], &shm_fd);
+    }
+    else {
+        pipe_read(STDIN_FILENO, shm_name);
+        shared_memory = createSharedMemory(shm_name, &shm_fd);
+    }
+    // // Read and display shared memory data
     readSharedMemory(shm_semaphore, avail_semaphore, shared_memory);
 
     // Clean up
