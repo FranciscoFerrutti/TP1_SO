@@ -25,3 +25,8 @@ vision
 
 #testing folder
 files
+
+#git and bash
+.bash_history
+.gitconfig
+.lesshst
