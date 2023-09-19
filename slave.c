@@ -34,18 +34,17 @@ int main() {
             perror("popen");
             exit(EXIT_FAILURE);
         }
-        // fgets(md5, MAX_MD5+MAX_PATH , fp);
+        
         fgets(md5, MAX_MD5+strlen(path)+OFFSET, fp);
-        // md5[MAX_MD5+MAX_PATH] = '\0';
+        
         md5[MAX_MD5+strlen(path)+OFFSET+1] = '\0';
         pclose(fp);
 
-        // Write the MD5 hash to the parent process
+        
         pipe_write(STDOUT_FILENO, md5);
     }
-
-    // Close the write end of the pipe before exiting
+    
     close(STDOUT_FILENO);
-
+    
     exit(EXIT_SUCCESS);
 }
