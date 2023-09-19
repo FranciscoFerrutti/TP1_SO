@@ -14,7 +14,7 @@ $   <path_to_md5.elf>/md5.elf <files_for_hashing>
 
 For seeing in real time the hash generation, execute the following
 ```
-$   <path_to_md5.elf>/md5.elf <files_for_hashing> | ./<path_to_vision.elf>/vision.elf
+$   ./<path_to_md5.elf>/md5.elf <files_for_hashing> | ./<path_to_vision.elf>/vision.elf
 ```
 
 For removing the generated files
